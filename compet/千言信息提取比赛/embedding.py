@@ -57,8 +57,7 @@ class MergeEmbedding(nn.Module):
             words_embedded = self._embedding_words(words) 
             batch_words_embedding.append(words_embedded)
         
-        rst = torch.stack(batch_words_embedding)
-        print(rst.size())
+        return torch.stack(batch_words_embedding)
         
 
     def forward(self, sentences): 
