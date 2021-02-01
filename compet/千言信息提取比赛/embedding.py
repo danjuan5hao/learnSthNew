@@ -64,6 +64,9 @@ class MergeEmbedding(nn.Module):
         return self._embedding_batch_words(sentences)
 
 
+
+
+
 if __name__ == "__main__":
     test_sentences = [["我们", "老肥", "大兄嘇"],
                       ["我们", "老肥",  '嘇']]
