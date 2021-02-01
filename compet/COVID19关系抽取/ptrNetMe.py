@@ -41,9 +41,10 @@ class Attention(nn.Module):
         a = torch.tanh(inputs + context)
 
         v = self.V.unsqueeze(0).expand(batch_size, -1).unsqueeze(1)
-        att = F.softmax(torch.bmm(v, a.permute(0,2,1)), dim=1).squeeze(1)
-
-        return att
+        
+        att_row = torch.bmm(v, a.permute(0,2,1))
+        att = att = F.softmax(att_row, dim=1).squeeze(1)
+        return att_row, att
      
     
 class Decoder(nn.Module):
@@ -75,16 +76,16 @@ class Decoder(nn.Module):
 
             h = torch.tanh(self.dense(x))
 
-            att = self.attn(h, context)
-            return att, h
+            att_row, att = self.attn(h, context)
+            return att_row, att, h
 
-        att, h = step(self.first_decode_input_bert_embedding.expand(batch_size, -1), first_hidden)
+        att_row,att,  h = step(self.first_decode_input_bert_embedding.expand(batch_size, -1), first_hidden)
         # atts.append(att)
         for i in range(input_feautures.size(1)):
             t_i = input_feautures[:, i, ...]
             
-            att, h = step(t_i, h)
-            atts.append(att)
+            att_row, att, h = step(t_i, h)
+            atts.append(att_row)
             max_probs, indices = att.max(1)
             prts.append(indices)
 

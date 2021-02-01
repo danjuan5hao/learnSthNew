@@ -3,7 +3,7 @@ import os
 
 import torch 
 import torch.nn as nn 
-from torch.utils.data import DataLoader 
+from torch.utils.data import DataLoader, Subset 
 import torch.optim as optim
 
 from dataLoader import PtrDataset
@@ -19,8 +19,8 @@ optimizer = optim.Adam(model_me.parameters())
 train_path = r"data\head"
 
 dataset = PtrDataset(train_path)
-dataloader = DataLoader(dataset, batch_size = 2) 
-
+datasubset =    Subset(dataset, range(7, 17))
+dataloader = DataLoader(datasubset, batch_size = 2) 
 ## 这里model 用的应该是 atten的output和label 做拟合， 而不是得到的atten的max和label做拟合。 
 
 model_me.train()
@@ -44,5 +44,5 @@ for i in range(60):
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        print(loss)
+        print(loss.data)
    
