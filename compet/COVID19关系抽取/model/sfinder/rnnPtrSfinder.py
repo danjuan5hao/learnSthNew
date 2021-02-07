@@ -81,17 +81,11 @@ class Decoder(nn.Module):
         
         def step(inp, h):
             h = self.dense_s(h)
-            # print(h.size())
-            # print(self.dense_input(inp).size())
-            # exit()
             s = torch.cat([self.dense_input(inp), h], dim=1)
-
-            
             att_before_softmax, att_after_softmax = self.attn(s, context)
             return att_before_softmax, att_after_softmax, h
 
-        att_before_softmax, att_after_softmax,  h = step(self.first_decode_input_bert_embedding.expand(batch_size, -1), h_first)
-        atts.append(att_before_softmax)
+        h = context[:, -1, ...]
 
         for i in range(decoder_input_feautures.size(1)):
             t_i = decoder_input_feautures[:, i, ...]
@@ -100,7 +94,7 @@ class Decoder(nn.Module):
             max_probs, indices = att_after_softmax.max(1)
             prts.append(indices)
 
-        return torch.stack(atts), prts
+        return torch.stack(atts, dim=1).squeeze(), prts
 
 class RnnPtrSfinder(nn.Module):
     def __init__(self, pretrain_model_weight="bert-base-cased", hidden_size=256):
@@ -126,7 +120,7 @@ class RnnPtrSfinder(nn.Module):
      
 
 if __name__ == "__main__":
-    batch_size = 6
+    batch_size = 3
     bert_embedding = AutoModel.from_pretrained("bert-base-cased")
     test_sentence = {'input_ids': [9218, 1105, 23891, 1104, 1107, 4487, 7912], 
                      'token_type_ids': [0, 0, 0, 0, 0, 0, 0], 
@@ -143,5 +137,6 @@ if __name__ == "__main__":
     test_ptrnet = RnnPtrSfinder()
     atts, ptrs = test_ptrnet(test_sentence_batch_input_ids, test_sentence_batch_input_ids, test_sentence_batch_token_type_ids,
                       test_sentence_batch_token_type_ids, test_sentence_batch_attention_mask, test_sentence_batch_attention_mask)
+
 
     print(atts.size())

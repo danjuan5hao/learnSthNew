@@ -17,18 +17,17 @@ class PtrSfinderDataset(Dataset):
 
         self.get_all_texts_tags()
 
-    
     def get_text_tag_seq(self, file):
         """
         """
         with open(file, "r", encoding="utf-8") as f:
-            text_bert_idx_seq = []  # 
-            text_bert_attn_mask = []
-            text_bert_seq_type_id = []
+            text_bert_idx_seq = [self.pstart_idx]  # 
+            text_bert_attn_mask = [1]
+            text_bert_seq_type_id = [0]
 
-            tag_bert_idx_seq = []  
-            tag_bert_attn_mask = []
-            tag_bert_seq_type_id = []
+            tag_bert_idx_seq = [self.pstart_idx]  
+            tag_bert_attn_mask = [1]
+            tag_bert_seq_type_id = [0]
 
             tag_points_truth = []
 
