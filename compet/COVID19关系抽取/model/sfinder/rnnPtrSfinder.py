@@ -50,15 +50,15 @@ class Attention(nn.Module):
         v = self.V.unsqueeze(0).expand(batch_size, -1).unsqueeze(1)
         
         att_before_softmax = torch.bmm(v, a.permute(0,2,1))
-        att_after_softmax = F.softmax(att_row, dim=1).squeeze(1)
-        return att_before_softmax, att_after_softmax, inputs
+        att_after_softmax = F.softmax(att_before_softmax, dim=1).squeeze(1)
+        return att_before_softmax, att_after_softmax
      
     
 class Decoder(nn.Module):
     def __init__(self, bert_embedding, hidden_size):
         super(Decoder, self).__init__()
         self.bert_embedding = bert_embedding
-        self.attn = Attention(hidden_size, hidden_size) # TODO bert_emb_dim should 
+        self.attn = Attention(hidden_size*2, hidden_size) # TODO bert_emb_dim should 
         self.first_decode_input_bert_embedding = nn.Parameter(torch.FloatTensor(768), requires_grad=True)
         self.dense_input = nn.Linear(768, hidden_size)
         self.dense_s = nn.Linear(hidden_size, hidden_size)
@@ -81,7 +81,12 @@ class Decoder(nn.Module):
         
         def step(inp, h):
             h = self.dense_s(h)
+            # print(h.size())
+            # print(self.dense_input(inp).size())
+            # exit()
             s = torch.cat([self.dense_input(inp), h], dim=1)
+
+            
             att_before_softmax, att_after_softmax = self.attn(s, context)
             return att_before_softmax, att_after_softmax, h
 
@@ -114,25 +119,15 @@ class RnnPtrSfinder(nn.Module):
 
 
 
-        ptr = self.decoder(decoder_input_ids, decoder_attn_mask, decoder_seq_type_id,
+        atts, ptrs = self.decoder(decoder_input_ids, decoder_attn_mask, decoder_seq_type_id,
                            h_first, context)
 
-        return ptr
+        return atts, ptrs
      
 
 if __name__ == "__main__":
-    # decoder_feature_dim = 512
-    # decoder_hidden_dim = 512
     batch_size = 6
-    # seq_len = 10
-
     bert_embedding = AutoModel.from_pretrained("bert-base-cased")
-    # test_attention_layer =  Attention(decoder_feature_dim, decoder_hidden_dim)
-    # test_decoder = Decoder(bert_embedding, decoder_hidden_dim)
-
-    # fake_att_input = torch.randn(batch_size, decoder_feature_dim)
-    # fake_att_context = torch.randn(batch_size, seq_len, decoder_hidden_dim)
-    # test_attention_layer(fake_att_input, fake_att_context)
     test_sentence = {'input_ids': [9218, 1105, 23891, 1104, 1107, 4487, 7912], 
                      'token_type_ids': [0, 0, 0, 0, 0, 0, 0], 
                      'attention_mask': [1, 1, 1, 1, 1, 1, 1]}
@@ -145,15 +140,8 @@ if __name__ == "__main__":
     test_sentence_batch_token_type_ids = [test_sentence.get('token_type_ids')] * batch_size
     test_sentence_batch_token_type_ids = torch.tensor(test_sentence_batch_token_type_ids, dtype=torch.long)
     
-    # fake_context = torch.randn(batch_size, seq_len, decoder_hidden_dim)
-    # fake_first_hidden = torch.randn(batch_size, decoder_hidden_dim)
-    
-    # test_decoder(test_sentence_batch_input_ids, test_sentence_batch_attention_mask,
-    #                 fake_first_hidden, fake_context)
-
-
     test_ptrnet = RnnPtrSfinder()
-    rst = test_ptrnet(test_sentence_batch_input_ids, test_sentence_batch_input_ids, test_sentence_batch_token_type_ids,
+    atts, ptrs = test_ptrnet(test_sentence_batch_input_ids, test_sentence_batch_input_ids, test_sentence_batch_token_type_ids,
                       test_sentence_batch_token_type_ids, test_sentence_batch_attention_mask, test_sentence_batch_attention_mask)
 
-
+    print(atts.size())

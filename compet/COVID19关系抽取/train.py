@@ -1,48 +1,30 @@
 # -*- coding: utf-8 -*-
-import os 
-
 import torch 
-import torch.nn as nn 
-from torch.utils.data import DataLoader, Subset 
-import torch.optim as optim
+from torch.utils.data import Subset, DataLoader
+from dataLoader import PtrSfinderDataset
 
-from dataLoader import PtrDataset
-# from ptrNet import PointerNet
-from ptrNetMe import PrtNet as PrtNetMe
+from model.sfinder.rnnPtrSfinder import RnnPtrSfinder 
 
-# model_you = PointerNet(embedding_dim=100,
-#              hidden_dim=256,lstm_layers=2,dropout=0.5)
-model_me = PrtNetMe()
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model_me.parameters())
+root = r"./data/head"
+dataset = PtrSfinderDataset(root)
+subset = Subset(dataset, range(9))
 
-train_path = r"data\head"
+loader = DataLoader(subset, batch_size=2)
+model = RnnPtrSfinder()
 
-dataset = PtrDataset(train_path)
-datasubset =    Subset(dataset, range(7, 17))
-dataloader = DataLoader(datasubset, batch_size = 2) 
-## 这里model 用的应该是 atten的output和label 做拟合， 而不是得到的atten的max和label做拟合。 
+for i in range(100):
+    for batch in loader:
+        all_text_bert_idx_seq = batch[0]
+        all_text_bert_attn_mask = batch[1]
+        all_text_bert_seq_type_id = batch[2]
+        all_tag_bert_idx_seq = batch[3]
+        all_tag_bert_attn_mask = batch[4]
+        all_tag_bert_seq_type_id = batch[5]
+        all_tag_points_truth = batch[6]
 
-model_me.train()
-for i in range(60):
-    for batch in dataloader:
-        optimizer.zero_grad()
-        inputs = {"input_ids": batch[0],
-                "mask": batch[1],
-                "token_type_id": batch[2], 
-                "decoder_inputs": batch[3],
-                "decoder_mask": torch.tensor([[1]*10]*2, dtype=torch.long),
-                "labels": batch[4]}
+        attns, ptrs = model(all_text_bert_idx_seq, all_text_bert_attn_mask, all_text_bert_seq_type_id,
+                            all_tag_bert_idx_seq, all_tag_bert_attn_mask, all_tag_bert_seq_type_id)
 
-        outputs = model_me(inputs.get("input_ids"),
-                        inputs.get("decoder_inputs"),
-                        inputs.get("mask"),
-                        inputs.get("decoder_mask"))[0]
-        outputs = outputs.contiguous().view(-1, outputs.size()[-1])
-        labels = inputs.get("labels").view(-1)
-
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-    print(loss.data)
-   
+        print(attns.size())
+        exit()
+    
