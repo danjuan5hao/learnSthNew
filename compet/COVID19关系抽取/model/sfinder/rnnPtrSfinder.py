@@ -6,22 +6,24 @@ import torch.nn.functional as F
 
 from transformers import AutoModel
 
-
 class Encoder(nn.Module):
+    """
+    """
 
     def __init__(self, input_size, hidden_size):
         super(Encoder, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, bidirectional=True, batch_first=True)
     
-    def forward(self, x, mask=None):
-        if mask:
-            x = torch.masked_select(x, mask) 
-        outputs, (h, c) = self.lstm(x)       
-
-        return outputs, h.view(-1, h.size(2)* h.size(0)), c
+    def forward(self, x):
+        # if mask:
+        #     x = torch.masked_select(x, mask) 
+        outputs, (_, _) = self.lstm(x)       
+        return outputs, outputs[:, -1, ...]
            
     
 class Attention(nn.Module):
+    """
+    """
 
     def __init__(self, input_size, hidden_size, d3=128):
         super(Attention, self).__init__()
