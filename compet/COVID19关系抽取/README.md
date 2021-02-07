@@ -31,3 +31,10 @@
 ## 参考文献
 1. [基于DGCNN和概率图的轻量级信息抽取模型](https://kexue.fm/archives/6671)
 2. [【AI Drive】第30期：平安人寿谢舒翼 | SemEval-2020自由文本信息抽取冠军方案解读 ](https://www.bilibili.com/video/av969121739/)
+
+
+
+
+
+# TODO
+制作ptrsfinder，processor的时候，需要把token的seq idx 都加1，方便添加头，避免引起歧义。

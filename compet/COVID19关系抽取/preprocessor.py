@@ -85,14 +85,14 @@ class BertTokenPreprocessor:
             pad_struc.pretrain_vocab_idx = self.PRETRAIN_VOCAB.get(self.PAD_TOKEN)
             return pad_struc
         
-        def pad_trunc_tokened_text(strus):
-            strus = strus[:self.MAX_LEN] 
-            strus = strus + [build_PAD_struc()]*(self.MAX_LEN-len(strus))
-            return strus
+        # def pad_trunc_tokened_text(strus):
+        #     strus = strus[:self.MAX_LEN] 
+        #     strus = strus + [build_PAD_struc()]*(self.MAX_LEN-len(strus))
+        #     return strus
         
-        tokened_stru = pad_trunc_tokened_text(seq_token_stru)
+        # tokened_stru = pad_trunc_tokened_text(seq_token_stru)
 
-        return tokened_stru
+        return seq_token_stru
    
     def tokenize(self, text): 
         return self.TOKENIZER.tokenize(text)
