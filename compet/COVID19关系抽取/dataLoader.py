@@ -29,9 +29,9 @@ class PtrSfinderDataset(Dataset):
             text_bert_attn_mask = []
             text_bert_seq_type_id = []
 
-            tag_bert_idx_seq = [self.pstart_idx]
-            tag_bert_attn_mask = [1]
-            tag_bert_seq_type_id = [0]
+            tag_bert_idx_seq = []
+            tag_bert_attn_mask = []
+            tag_bert_seq_type_id = []
 
             tag_points_truth = []
 

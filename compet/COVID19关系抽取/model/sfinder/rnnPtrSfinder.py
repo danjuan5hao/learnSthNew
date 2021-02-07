@@ -9,15 +9,20 @@ from transformers import AutoModel
 class Encoder(nn.Module):
     """
     """
-
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, bert_embedding,  rnn_hidden_size):
         super(Encoder, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, bidirectional=True, batch_first=True)
+        self.bert_embedding_layer = bert_embedding
+        self.lstm = nn.LSTM(768, rnn_hidden_size, bidirectional=True, batch_first=True)
+
+        # self.en_h_0 = nn.parameter()
+        # self.en_c_0 = nn.parameter()
     
-    def forward(self, x):
-        # if mask:
-        #     x = torch.masked_select(x, mask) 
-        outputs, (_, _) = self.lstm(x)       
+    def forward(self, input_ids, attn_mask, token_type_ids):
+
+        bert_embedded = self.bert_embedding_layer(input_ids, attn_mask, token_type_ids)
+        bert_feature = bert_embedded[0]
+
+        outputs, (_, _) = self.lstm(bert_feature)       
         return outputs, outputs[:, -1, ...]
            
     
@@ -44,9 +49,9 @@ class Attention(nn.Module):
 
         v = self.V.unsqueeze(0).expand(batch_size, -1).unsqueeze(1)
         
-        att_row = torch.bmm(v, a.permute(0,2,1))
-        att = att = F.softmax(att_row, dim=1).squeeze(1)
-        return att_row, att
+        att_before_softmax = torch.bmm(v, a.permute(0,2,1))
+        att_after_softmax = F.softmax(att_row, dim=1).squeeze(1)
+        return att_before_softmax, att_after_softmax, inputs
      
     
 class Decoder(nn.Module):
@@ -55,69 +60,69 @@ class Decoder(nn.Module):
         self.bert_embedding = bert_embedding
         self.attn = Attention(hidden_size, hidden_size) # TODO bert_emb_dim should 
         self.first_decode_input_bert_embedding = nn.Parameter(torch.FloatTensor(768), requires_grad=True)
-        self.dense = nn.Linear(768+hidden_size, hidden_size)
+        self.dense_input = nn.Linear(768, hidden_size)
+        self.dense_s = nn.Linear(hidden_size, hidden_size)
 
-    def forward(self, input_ids, mask, first_hidden, context):
+    def forward(self, 
+                decoder_input_ids, decoder_attn_mask, decoder_seq_type_id,
+                h_first, context):
         """
         input_ids: [batch, seq_len]
         
         """
-
-        prts = []
+        prts = []  # 记录产生的每一步atten的最大值的索引
         atts = []
-        input_feautures = self.bert_embedding(input_ids, 
-                            attention_mask=mask) 
+
+        decoder_input_feautures = self.bert_embedding(decoder_input_ids, decoder_attn_mask, decoder_seq_type_id) 
         # outputs[0] # batch, seq_len, bert_emb_dim,
-        input_feautures = input_feautures[0]
+        decoder_input_feautures = decoder_input_feautures[0]
         
-        batch_size = first_hidden.size(0)
+        batch_size = h_first.size(0)
         
         def step(inp, h):
-  
-            x = torch.cat([inp, h], dim=1) 
+            h = self.dense_s(h)
+            s = torch.cat([self.dense_input(inp), h], dim=1)
+            att_before_softmax, att_after_softmax = self.attn(s, context)
+            return att_before_softmax, att_after_softmax, h
 
-            h = torch.tanh(self.dense(x))
+        att_before_softmax, att_after_softmax,  h = step(self.first_decode_input_bert_embedding.expand(batch_size, -1), h_first)
+        atts.append(att_before_softmax)
 
-            att_row, att = self.attn(h, context)
-            return att_row, att, h
-
-        att_row,att,  h = step(self.first_decode_input_bert_embedding.expand(batch_size, -1), first_hidden)
-        # atts.append(att)
-        for i in range(input_feautures.size(1)):
-            t_i = input_feautures[:, i, ...]
-            
-            att_row, att, h = step(t_i, h)
-            atts.append(att_row)
-            max_probs, indices = att.max(1)
+        for i in range(decoder_input_feautures.size(1)):
+            t_i = decoder_input_feautures[:, i, ...]
+            att_before_softmax, att_after_softmax, h = step(t_i, h)
+            atts.append(att_before_softmax)
+            max_probs, indices = att_after_softmax.max(1)
             prts.append(indices)
 
         return torch.stack(atts), prts
 
-         
-class PrtNet(nn.Module):
+class RnnPtrSfinder(nn.Module):
     def __init__(self, pretrain_model_weight="bert-base-cased", hidden_size=256):
-        super(PrtNet, self).__init__()
+        super(RnnPtrSfinder, self).__init__()
         
         self.bert_embedding = AutoModel.from_pretrained(pretrain_model_weight)
-        self.encoder = Encoder(768, hidden_size)  # 768 需要去自动获得？？ TODO
+        self.encoder = Encoder(self.bert_embedding, hidden_size)  # 768 需要去自动获得？？ TODO
         self.decoder = Decoder(self.bert_embedding, hidden_size=hidden_size*2)
         # self.decoder_input0 = nn.Parameter(torch.FloatTensor(embedding_dim), requires_grad=False)
         # nn.init.uniform_(self.decoder_input0, -1, 1) 
         
-    def forward(self, encoder_input_ids, decoder_inputs_ids, enocder_mask=None, decoder_mask=None):
-        outputs = self.bert_embedding(encoder_input_ids, 
-                                    attention_mask=enocder_mask) 
-        context, h, c = self.encoder(outputs[0])
+    def forward(self, encoder_input_ids, encoder_attn_mask, encoder_seq_type_id,
+                      decoder_input_ids, decoder_attn_mask, decoder_seq_type_id):
 
-        ptr = self.decoder(decoder_inputs_ids, 
-                           decoder_mask, h, context)
+        context, h_first = self.encoder(encoder_input_ids, encoder_attn_mask, encoder_seq_type_id)
+
+
+
+        ptr = self.decoder(decoder_input_ids, decoder_attn_mask, decoder_seq_type_id,
+                           h_first, context)
 
         return ptr
      
 
 if __name__ == "__main__":
-    decoder_feature_dim = 512
-    decoder_hidden_dim = 512
+    # decoder_feature_dim = 512
+    # decoder_hidden_dim = 512
     batch_size = 6
     # seq_len = 10
 
@@ -136,6 +141,9 @@ if __name__ == "__main__":
     test_sentence_batch_input_ids = torch.tensor(test_sentence_batch_input_ids, dtype=torch.long)
     test_sentence_batch_attention_mask = [test_sentence.get('attention_mask')] * batch_size
     test_sentence_batch_attention_mask = torch.tensor(test_sentence_batch_attention_mask, dtype=torch.long)
+
+    test_sentence_batch_token_type_ids = [test_sentence.get('token_type_ids')] * batch_size
+    test_sentence_batch_token_type_ids = torch.tensor(test_sentence_batch_token_type_ids, dtype=torch.long)
     
     # fake_context = torch.randn(batch_size, seq_len, decoder_hidden_dim)
     # fake_first_hidden = torch.randn(batch_size, decoder_hidden_dim)
@@ -144,8 +152,8 @@ if __name__ == "__main__":
     #                 fake_first_hidden, fake_context)
 
 
-    test_ptrnet = PrtNet()
-    rst = test_ptrnet(test_sentence_batch_input_ids, test_sentence_batch_input_ids,
-                test_sentence_batch_attention_mask, test_sentence_batch_attention_mask)
+    test_ptrnet = RnnPtrSfinder()
+    rst = test_ptrnet(test_sentence_batch_input_ids, test_sentence_batch_input_ids, test_sentence_batch_token_type_ids,
+                      test_sentence_batch_token_type_ids, test_sentence_batch_attention_mask, test_sentence_batch_attention_mask)
 
 
