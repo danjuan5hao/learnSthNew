@@ -18,7 +18,7 @@ certi = SeqCceLoss()
 optim = torch.optim.Adam(model.parameters())
 
 model.train()
-for i in range(100):
+for i in range(10):
     for batch in loader:
         optim.zero_grad()
         all_text_bert_idx_seq = batch[0]
@@ -33,9 +33,10 @@ for i in range(100):
                             all_tag_bert_idx_seq, all_tag_bert_attn_mask, all_tag_bert_seq_type_id)
 
         loss = certi(attns, all_tag_points_truth)
+        print(loss.data)
         loss.backward()
         optim.step()
-    print(loss.data)
+    
 
 
     
