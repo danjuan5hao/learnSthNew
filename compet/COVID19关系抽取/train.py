@@ -44,5 +44,5 @@ for i in range(60):
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        print(loss.data)
+    print(loss.data)
    

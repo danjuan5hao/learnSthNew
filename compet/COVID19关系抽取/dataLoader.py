@@ -4,14 +4,17 @@ import torch
 
 from torch.utils.data import Dataset
 
-class PtrDataset(Dataset):
+class SDataset(Dataset):
+    """
+
+
+    """
     def __init__(self, data_dir, end_idx=2, tag_max_len=10):
-        super(PtrDataset, self).__init__()
+        super(SDataset, self).__init__()
         self.end_idx = end_idx
         self.root = data_dir
         self.tag_max_len = tag_max_len
         self.get_all_texts_tags()
-        
 
     def get_text_tag_seq(self, file):
         
