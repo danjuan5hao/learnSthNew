@@ -116,7 +116,7 @@ class RnnPtrSfinder(nn.Module):
         atts, ptrs = self.decoder(decoder_input_ids, decoder_attn_mask, decoder_seq_type_id,
                            h_first, context)
 
-        return atts, ptrs
+        return atts, ptrs, context
      
 
 if __name__ == "__main__":

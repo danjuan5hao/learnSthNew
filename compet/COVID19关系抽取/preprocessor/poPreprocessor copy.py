@@ -1,16 +1,19 @@
-# -*- coding: utf-8 -*-
-import json
+# -*- coding: utf-8 -*- 
+import json 
 import os, sys 
 
-from transformers import AutoTokenizer
+from collections import Counter
+from random import choice 
+
+from transformers import AutoTokenizer 
+
 
 class DataConfig:
     ROOT = r"D:\data\数据资料\biendata\covid19赛道二关系抽取\task2_public"
     train_text = "task2_user_train.json"
     train_label = "task2_train_label.json"
 
-    save_root = os.path.join(os.path.dirname(__file__), "data/head")
-
+    save_root = os.path.join(os.path.dirname(__file__), "../data/po")
 
 class TokenStru:
     """
@@ -24,37 +27,16 @@ class TokenStru:
         self.token_tag = None 
         self.pretrain_vocab_idx = None
         self.attn_mask = None 
-    
-    # def __repr__(self):
-    #     return f"{self.token_idx}\t{self.string}\t{self.string_start}\t{self.string_end}\t{self.token_tag}"
 
-
-# def convert_text_to_ids(self, text):
-
-#     tokens = TOKENIZER.tokenize(text, add_special_tokens=True)
-#     tokens = ["[CLS]"]+tokens[:MAX_LEN-2]+["[SEP]"]
-#     text_len = len(tokens)
-#     input_ids = TOKENIZER.convert_tokens_to_ids(tokens+["[PAD]"]*(MAX_LEN-text_len))
-#     attention_mask = [1]*text_len+[0]*(MAX_LEN-text_len)
-#     token_type_ids = [0]*MAX_LEN
-
-#     assert len(input_ids) == MAX_LEN
-#     assert len(attention_mask) == MAX_LEN
-#     assert len(token_type_ids) == MAX_LEN
-
-#     return tokens, input_ids, attention_mask, token_type_ids
-
-
-class BertTokenPreprocessor:
+class PoPreprocessor:
     """
-    用来对数据集进行预处理，得到需要的形式，
-    因为是seq tagging 任务，基础形式参照 subword-级别的NER任务标注。
+    每一个train example 随机取出来一条关系
+    把 head 和 tail 的实体，分别在 对应到 pretrain-weight-tokeinzier的vocab中
+    把关系进行labelEncodeing。
 
-    原数据标注根据char级别进行标注，需要改为根据tokenizer的vocab进行标注。
-    具体做法如下，
-    1. 用tokennizer对text分词， 记录每个token的长度
-    2. 通过token长度，对齐char级别的标注。为token打上tag
-    3. 因为会出现"[UNK]"，含有"[UNK]"数据不能自动打标，需人工打标或弃置。
+    最终关系表现为【head-start; head-end】【rel-idx】【tail-start; tail-end】
+    用向量表示的话，最终会是一个【关系数量】*【text-max-len】类别的分类。
+
     """
     pretrain_model_weight = "bert-base-cased"
     SEP_TOKEN = "[SEP]"
@@ -65,7 +47,31 @@ class BertTokenPreprocessor:
     TOKENIZER = AutoTokenizer.from_pretrained('bert-base-cased')
     PRETRAIN_VOCAB = TOKENIZER.vocab
     
-    MAX_LEN = 100
+    MAX_LEN = 150
+
+    def __init__(self, train_text, train_labels, text_max_len, num_rel=None):
+        self._get_all_relation(train_labels)
+        if not num_rel:
+            self.num_rel = len(self.r2i)
+        else:
+            self.num_rel = num_rel
+        self.text_max_len = text_max_len
+    
+    def _get_all_relation(self, train_labels):
+        all_rel = []
+        for idx, spos in enumerate(train_labels):
+            spos = spos.get(f"train_{idx+1}")
+            for spo in spos:
+                rel = spo.get("rel")
+                all_rel.append(rel)
+        rel_set = set(all_rel)
+        self.r2i = {key: idx for idx, key in enumerate(rel_set)}
+        self.i2r = {idx: key for idx, key in enumerate(rel_set)}
+        return 
+
+    def choice_one(self, spos):
+        choiced = choice(spos)
+        return choiced
 
     def build_seq_token_stru(self, text): # 没有add speical token
         seq_token = self.tokenize(text)
@@ -122,91 +128,81 @@ class BertTokenPreprocessor:
                 token_idx_start_end.append((idx, token_s_idx, token_e_idx))
                 s_idx = token_e_idx
             else:  # 表明不能对齐这句sentence
-                raise ValueError(f"can't find {idx}: {t}")         
+                raise ValueError(f"can't align because {idx}: {t}")         
         return  token_idx_start_end
 
-    def tag_head(self, seq_tag, seq_token_stru):
-        """
-        为seq_token_stru中的token_tag字段填充值
-        """
-        def find_tag_in_seq_token_stru(tag, seq_token_stru):
-            head_word = tag.get("head").get("word")
-            head_start = tag.get("head").get("start")
-            head_end = tag.get("head").get("end")
+    def find_tag_in_seq_token_stru(self, tag, seq_token_stru, tag_str):
+            word = tag.get(tag_str).get("word")
+            start = tag.get(tag_str).get("start")
+            end = tag.get(tag_str).get("end")
                 
             start_if = False
             end_if= False
             for i in range(len(seq_token_stru)):  # 是通过副作用来
                 token_stru = seq_token_stru[i]
 
-                if head_start == token_stru.string_start:
-                    token_stru.token_tag = "B-head"
+                if start == token_stru.string_start:
+                    token_stru.token_tag = f"B-{tag_str}"
                     start_if = True
-                if head_end == token_stru.string_end:
-                    if token_stru.token_tag == "B-head":
-                        token_stru.token_tag = "U-head"
+                if end == token_stru.string_end:
+                    if token_stru.token_tag == f"B-{tag_str}":
+                        token_stru.token_tag = f"U-{tag_str}"
                     else:
-                        token_stru.token_tag = "E-head"
+                        token_stru.token_tag = f"E-{tag_str}"
                     end_if = True
                 if start_if and end_if:
                     break
             if start_if == False or end_if == False:
-                raise ValueError(f"head:{head_word} not matched correctly. start: {head_start}, end: {head_end}")
+                raise ValueError(f"head:{word} not matched correctly. start: {start}, end: {end}")
             return 
-        # for tag in seq_tag:
-        
-        for i in range(len(seq_tag)):
-            tag = seq_tag[i]
-            find_tag_in_seq_token_stru(tag, seq_token_stru)
 
-            
-               
-        return seq_token_stru
+    def tag_text(self, text, spos):
+        choiced = choice(spos)
+        
+        seq_token_stru = self.build_seq_token_stru(text)
+        self.find_tag_in_seq_token_stru(choiced, seq_token_stru, tag_str="head")
+        self.find_tag_in_seq_token_stru(choiced, seq_token_stru, tag_str="tail")
+
+        rel_idx = self.r2i[choiced["rel"]]
+        need = {}
+        for stru in seq_token_stru:
+            if stru.token_tag in ["B-head", "U-head"]:
+                need["B-head"] = stru.token_idx
+            elif stru.token_tag == "E-head":
+                need["E-head"] = stru.token_idx
+            elif stru.token_tag in ["B-tail", "U-tail"]:
+                need["B-tail"] = stru.token_idx
+            elif stru.token_tag == "E-tail":
+                need["E-tail"] = stru.token_idx
+        need["rel"] = rel_idx
+        return need
+
+
 
 def openfile(file):
     with open(file, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return json.load(f)  
 
-def save(seq_token_stru, save_path):
-    with open(save_path, "w", encoding="utf-8", newline="") as f:
-        for i in seq_token_stru:
-            tag = i.token_tag 
-            tag = "O" if tag is None else tag
-            f.write(f"{i.token_idx}\t{i.string}\t{i.pretrain_vocab_idx}\t{i.attn_mask}\t{i.string_start}\t{i.string_end}\t{tag}\n") 
-
-
+def save(file, need:dict):
+    with open(file, "w", encoding="utf-8", newline="") as f:
+        line = f'{need.get("B-head", "EMPTY")}\t{need.get("E-head", "EMPTY")}\t{need.get("rel", "EMPTY")}\t{need.get("B-tail", "EMPTY")}\t{need.get("E-tail", "EMPTY")}\n'
+        f.write(line)
 
 if __name__ == "__main__":
     train_texts = openfile(os.path.join(DataConfig.ROOT, DataConfig.train_text))
     train_labels = openfile(os.path.join(DataConfig.ROOT, DataConfig.train_label))
 
-    assert len(train_texts) == len(train_labels)
-    print(f"{len(train_texts)} in total")
-
-    preprocessor = BertTokenPreprocessor()
-    
-    if not os.path.exists(DataConfig.save_root):
-        os.makedirs(DataConfig.save_root)
-
+    preprocessor = PoPreprocessor(train_texts, train_labels, PoPreprocessor.MAX_LEN)
     cnt = 0
     for idx in range(len(train_texts)): 
-        text = train_texts[idx]["train_{}".format(idx+1)]
-        seq_tag  = train_labels[idx][f"train_{idx+1}"]
         try:
-            seq_token_stru = preprocessor.build_seq_token_stru(text)  # 还没有
-        except ValueError as e:  # TODO 不能对齐就整个丢掉了，浪费数据，需要改。 主要是针对于"[UNK]"
-            print(f"{idx}: {e}")
+            text = train_texts[idx]["train_{}".format(idx+1)]
+            seq_tag  = train_labels[idx][f"train_{idx+1}"]
+            need = preprocessor.tag_text(text, seq_tag)
+            save(os.path.join(DataConfig.save_root, f"train_{idx+1}"), need)
+
+        except ValueError as e:
+            print(e)
             cnt += 1
             continue
-
-        try:
-            seq_token_stru = preprocessor.tag_head(seq_tag, seq_token_stru)
-            save_path = os.path.join(DataConfig.save_root, f"train_{idx+1}.txt")
-            save(seq_token_stru, save_path)
-
-        except ValueError as e: 
-            print(f"{idx}: {e}")
-            cnt += 1
-            continue
-    print(cnt)
-
+    

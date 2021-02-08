@@ -29,7 +29,7 @@ for i in range(10):
         all_tag_bert_seq_type_id = batch[5]
         all_tag_points_truth = batch[6]
 
-        attns, ptrs = model(all_text_bert_idx_seq, all_text_bert_attn_mask, all_text_bert_seq_type_id,
+        atts, ptrs, context = model(all_text_bert_idx_seq, all_text_bert_attn_mask, all_text_bert_seq_type_id,
                             all_tag_bert_idx_seq, all_tag_bert_attn_mask, all_tag_bert_seq_type_id)
 
         loss = certi(attns, all_tag_points_truth)
