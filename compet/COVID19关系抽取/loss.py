@@ -16,5 +16,6 @@ class SeqCceLoss(nn.Module):
         pred_flat = pred.view(-1, text_seq_len)
         truth_flat = truth.view(-1)
         return self.cce(pred_flat, truth_flat)
-            
+
+class Loss():
     
