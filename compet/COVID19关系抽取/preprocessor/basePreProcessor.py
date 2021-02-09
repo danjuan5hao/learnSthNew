@@ -5,7 +5,6 @@ from random import choice
 
 from transformers import AutoTokenizer
 
-
 def openfile(file):
     with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -32,6 +31,16 @@ class TokenStru:
         self.attn_mask = None 
 
 class BasePreProcessor:
+    """
+    用来对数据集进行预处理，得到需要的形式，
+    因为是seq tagging 任务，基础形式参照 subword-级别的NER任务标注。
+
+    原数据标注根据char级别进行标注，需要改为根据tokenizer的vocab进行标注。
+    具体做法如下，
+    1. 用tokennizer对text分词， 记录每个token的长度
+    2. 通过token长度，对齐char级别的标注。为token打上tag
+    3. 因为会出现"[UNK]"，含有"[UNK]"数据不能自动打标，需人工打标或弃置。
+    """
     pretrain_model_weight = "bert-base-cased"
     SEP_TOKEN = "[SEP]"
     CLS_TOKEN = "[CLS]"
@@ -41,7 +50,33 @@ class BasePreProcessor:
     TOKENIZER = AutoTokenizer.from_pretrained(pretrain_model_weight)
     PRETRAIN_VOCAB = TOKENIZER.vocab
     
-    MAX_LEN = 150
+
+    def build_seq_token_stru(self, text): # 没有add speical token
+        seq_token = self.tokenize(text)
+        token_idx_start_end = self.chars_token_align(text, seq_token)
+        seq_token_stru = [TokenStru(i) for i in seq_token]  # 初始化所有token_stru
+
+        for stru, (ix, start, end) in zip(seq_token_stru, token_idx_start_end):
+            stru.string_start, stru.string_end, stru.token_idx = start, end, ix
+            stru.pretrain_vocab_idx = self.PRETRAIN_VOCAB[stru.string]
+            stru.attn_mask = 1
+            stru.token_type_ids = 0
+
+        def build_PAD_struc():
+            pad_struc = TokenStru(self.PAD_TOKEN)
+            pad_struc.attn_mask = 0
+            pad_struc.token_type_ids = 0
+            pad_struc.pretrain_vocab_idx = self.PRETRAIN_VOCAB.get(self.PAD_TOKEN)
+            return pad_struc
+        
+        # def pad_trunc_tokened_text(strus):
+        #     strus = strus[:self.MAX_LEN] 
+        #     strus = strus + [build_PAD_struc()]*(self.MAX_LEN-len(strus))
+        #     return strus
+        
+        # tokened_stru = pad_trunc_tokened_text(seq_token_stru)
+
+        return seq_token_stru
 
     def tokenize(self, text): 
         return self.TOKENIZER.tokenize(text)
@@ -63,13 +98,12 @@ class BasePreProcessor:
         token_idx_start_end = []  # 记录token的索引， 以及在sentence中的开始位置，结束位置，以及
         for idx, t in enumerate(tokenized):
             t_char, t_len = self.get_t_char_and_len(t)
-            
-            token_s_idx = sentence.find(t_char, s_idx, s_idx+t_len+2)
+            token_s_idx = sentence.find(t_char, max(0,s_idx-2), min(s_idx+t_len+2, len(sentence)))
             if token_s_idx != -1:
                 token_e_idx = token_s_idx + t_len
                 token_idx_start_end.append((idx, token_s_idx, token_e_idx))
                 s_idx = token_e_idx
-            else:  # 表明不能对齐这句sentence
+            else:  # 表明不能对齐这句sentence  
                 raise ValueError(f"can't find {idx}: {t}")         
         return  token_idx_start_end
 
