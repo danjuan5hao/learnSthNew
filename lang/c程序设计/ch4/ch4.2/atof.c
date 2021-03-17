@@ -1,5 +1,5 @@
 #include <ctype.h>
-
+/* atof: convert string s to double */
 double atof(char s[])
 {
     double val, power; 
@@ -19,4 +19,10 @@ double atof(char s[])
         power *= 10;
     }
     return sign * val / power;
+}
+
+int atoi(char s[])
+{
+    double atof(char s[]); // 为什么要声明
+    return (int) atof(s);
 }
